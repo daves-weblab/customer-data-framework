@@ -15,17 +15,22 @@
 
 namespace CustomerManagementFrameworkBundle\SegmentAssignment\Indexer;
 
+use CustomerManagementFrameworkBundle\SegmentAssignment\QueueBuilder\QueueBuilderInterface;
+use CustomerManagementFrameworkBundle\SegmentAssignment\StoredFunctions\StoredFunctionsInterface;
+use CustomerManagementFrameworkBundle\Traits\LoggerAware;
 use Pimcore\Db\Connection;
+use Pimcore\Logger;
 
 class Indexer implements IndexerInterface
 {
-    const STORED_FUNCTIONS = [
-        'document' => 'PLUGIN_CMF_COLLECT_DOCUMENT_SEGMENT_ASSIGNMENTS',
-        'asset' => 'PLUGIN_CMF_COLLECT_ASSET_SEGMENT_ASSIGNMENTS',
-        'object' => 'PLUGIN_CMF_COLLECT_OBJECT_SEGMENT_ASSIGNMENTS'
-    ];
+    use LoggerAware;
 
     const PAGE_SIZE = 200;
+
+    /**
+     * @var string
+     */
+    private $segmentAssignmentTable = '';
 
     /**
      * @var string
@@ -38,9 +43,51 @@ class Indexer implements IndexerInterface
     private $segmentAssignmentQueueTable = '';
 
     /**
+     * @var StoredFunctionsInterface
+     */
+    private $storedFunctions = null;
+
+    /**
+     * @var QueueBuilderInterface
+     */
+    private $queueBuilder = null;
+
+    /**
      * @var Connection
      */
     private $db = null;
+
+    /**
+     * @param string $segmentAssignmentTable
+     * @param string $segmentAssignmentIndexTable
+     * @param string $segmentAssignmentQueueTable
+     * @param StoredFunctionsInterface $storedFunctions
+     * @param QueueBuilderInterface $queueBuilder
+     * @param Connection $db
+     */
+    public function __construct(string $segmentAssignmentTable, string $segmentAssignmentIndexTable, string $segmentAssignmentQueueTable, StoredFunctionsInterface $storedFunctions, QueueBuilderInterface $queueBuilder, Connection $db)
+    {
+        $this->setSegmentAssignmentTable($segmentAssignmentTable);
+        $this->setSegmentAssignmentIndexTable($segmentAssignmentIndexTable);
+        $this->setSegmentAssignmentQueueTable($segmentAssignmentQueueTable);
+        $this->setStoredFunctions($storedFunctions);
+        $this->setQueueBuilder($queueBuilder);
+        $this->setDb($db);
+    }
+
+    /**
+     * @return string
+     */
+    public function getSegmentAssignmentTable(): string {
+        return $this->segmentAssignmentTable;
+    }
+
+    /**
+     * @param string $segmentAssignmentTable
+     */
+    public function setSegmentAssignmentTable(string $segmentAssignmentTable) {
+        $this->segmentAssignmentTable = $segmentAssignmentTable;
+    }
 
     /**
      * @return string
@@ -75,6 +122,34 @@ class Indexer implements IndexerInterface
     }
 
     /**
+     * @return StoredFunctionsInterface
+     */
+    public function getStoredFunctions(): StoredFunctionsInterface {
+        return $this->storedFunctions;
+    }
+
+    /**
+     * @param StoredFunctionsInterface $storedFunctions
+     */
+    public function setStoredFunctions(StoredFunctionsInterface $storedFunctions) {
+        $this->storedFunctions = $storedFunctions;
+    }
+
+    /**
+     * @return QueueBuilderInterface
+     */
+    public function getQueueBuilder(): QueueBuilderInterface {
+        return $this->queueBuilder;
+    }
+
+    /**
+     * @param QueueBuilderInterface $queueBuilder
+     */
+    public function setQueueBuilder(QueueBuilderInterface $queueBuilder) {
+        $this->queueBuilder = $queueBuilder;
+    }
+
+    /**
      * @return Connection
      */
     public function getDb()
@@ -91,26 +166,16 @@ class Indexer implements IndexerInterface
     }
 
     /**
-     * @param string $segmentAssignmentIndexTable
-     * @param string $segmentAssignmentQueueTable
-     * @param Connection $db
-     */
-    public function __construct(string $segmentAssignmentIndexTable, string $segmentAssignmentQueueTable, Connection $db)
-    {
-        $this->setSegmentAssignmentIndexTable($segmentAssignmentIndexTable);
-        $this->setSegmentAssignmentQueueTable($segmentAssignmentQueueTable);
-        $this->setDb($db);
-    }
-
-    /**
      * @inheritDoc
      */
     public function processQueue(): bool
     {
-        $chunkStatement = sprintf('SELECT * FROM `%s` LIMIT %s', $this->getSegmentAssignmentQueueTable(), static::PAGE_SIZE);
+        $this->buildQueue(); // first enrich the queue table with all elements that are `inPreparation` and their children
 
+        $chunkStatement = sprintf('SELECT * FROM `%s` LIMIT %s', $this->getSegmentAssignmentQueueTable(), static::PAGE_SIZE);
+        $round = 0;
         $queuedElements = $this->getDb()->fetchAll($chunkStatement);
-        var_dump($queuedElements);
+
         while (sizeof($queuedElements) > 0) {
             foreach ($queuedElements as $element) {
                 $this->processElement($element);
@@ -118,6 +183,8 @@ class Indexer implements IndexerInterface
 
             $queuedElements = $this->getDb()->fetchAll($chunkStatement);
             \Pimcore::collectGarbage();
+
+            $this->getLogger()->info('### round: ' . ++$round);
         }
 
         return true;
@@ -135,29 +202,58 @@ class Indexer implements IndexerInterface
         $elementId = $element['elementId'];
         $elementType = $element['elementType'];
 
-        $segmentIds = explode(',', $this->getDb()->fetchColumn(sprintf('SELECT %s(%s)', static::STORED_FUNCTIONS[$elementType], $elementId)));
+        $segmentIds = $this->getStoredFunctions()->retrieve($elementId, $elementType);
 
-        if (1 === sizeof($segmentIds) && '' === $segmentIds[0]) {
-            $segmentIds[0] = 0;
-        }
 
         $values = join(',', array_map(function ($segmentId) use ($elementId, $elementType) {
+            $segmentId = '' !== $segmentId ? $segmentId : 0; //filter empty string when nothing is assigned
             return sprintf('(%s, "%s", %s)', $elementId, $elementType, $segmentId);
         }, $segmentIds));
-        echo $values;
+
         $formatArguments = [
             1 => $this->getSegmentAssignmentIndexTable(),
             2 => $this->getSegmentAssignmentQueueTable(),
-            3 => $elementId,
-            4 => $elementType,
-            5 => $values,
-            6 => join(',', $segmentIds)
+            3 => $this->getSegmentAssignmentTable(),
+            4 => $values
         ];
 
-        $this->getDb()->query(vsprintf('START TRANSACTION;'.
-        'INSERT INTO `%1$s` VALUES %5$s ON DUPLICATE KEY UPDATE `elementId` = `elementId`;'.
-        'DELETE FROM `%1$s` WHERE `elementId` = %3$s AND `elementType` = "%4$s" AND FIND_IN_SET(`segmentId`, "%6$s") = 0;'.
-        'DELETE FROM `%2$s` WHERE `elementId` = "%3$s" AND `elementType` = "%4$s";'.
-        'COMMIT;', $formatArguments));
+        $statement = vsprintf(
+            'INSERT INTO `%1$s` VALUES %4$s ON DUPLICATE KEY UPDATE `elementId` = `elementId`;'.
+            'DELETE FROM `%1$s` WHERE `elementId` = :elementId AND `elementType` = :elementType AND FIND_IN_SET(`segmentId`, :segmentIds) = 0;'.
+            'DELETE FROM `%2$s` WHERE `elementId` = :elementId AND `elementType` = :elementType;'.
+            'UPDATE %3$s SET `inPreparation` = 0 WHERE `elementId` = :elementId AND `elementType` = :elementType;',
+            $formatArguments);
+
+        $this->getDb()->beginTransaction();
+
+        $this->getDb()->executeQuery($statement,
+            [
+                'elementId' => $elementId,
+                'elementType' => $elementType,
+                'segmentIds' => join(',', $segmentIds)
+            ]);
+
+        try {
+            $this->getDb()->commit();
+        } catch (\Throwable $exception) {
+            $this->getLogger()->error($exception->getMessage());
+        }
+    }
+
+    /**
+     * Enqueues all elements with the flag `inPreparation` set to 1 and all of their children
+     *
+     * This is done so elements do not have to be enqueued during the saving process in the pimcore backend
+     */
+    private function buildQueue() {
+        $parentElements = $this->getDb()->fetchAll("SELECT * FROM `{$this->getSegmentAssignmentTable()}` WHERE `inPreparation` = 1");
+
+        foreach ($parentElements as $element) {
+            $id = $element['elementId'] ?? '';
+            $type = $element['elementType'] ?? '';
+
+            $this->getQueueBuilder()->enqueue($id, $type);
+            $this->getQueueBuilder()->enqueueChildren($id, $type);
+        }
     }
 }

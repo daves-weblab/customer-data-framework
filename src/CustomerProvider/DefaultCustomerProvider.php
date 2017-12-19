@@ -19,6 +19,7 @@ use CustomerManagementFrameworkBundle\CustomerProvider\ObjectNamingScheme\Object
 use CustomerManagementFrameworkBundle\Model\CustomerInterface;
 use Pimcore\Model\DataObject\Concrete;
 use Pimcore\Model\Element\ElementInterface;
+use Pimcore\Model\Factory;
 
 class DefaultCustomerProvider implements CustomerProviderInterface
 {
@@ -38,17 +39,26 @@ class DefaultCustomerProvider implements CustomerProviderInterface
     protected $namingScheme;
 
     /**
+     * @var Factory
+     */
+    protected $modelFactory;
+
+    /**
      * DefaultCustomerProvider constructor.
      *
      * @param string $pimcoreClass
      * @param string $parentPath
      * @param ObjectNamingSchemeInterface $namingScheme
      */
-    public function __construct($pimcoreClass, $parentPath, ObjectNamingSchemeInterface $namingScheme)
+    public function __construct($pimcoreClass, $parentPath, ObjectNamingSchemeInterface $namingScheme, Factory $modelFactory)
     {
         $this->pimcoreClass = $pimcoreClass;
         if (empty($this->pimcoreClass)) {
             throw new \RuntimeException('Customer class is not defined');
+        }
+
+        if(!class_exists('Pimcore\\Model\\DataObject\\' . $pimcoreClass)) {
+            throw new \RuntimeException(sprintf('Configured CMF customer data object class "%s" does not exist.', $pimcoreClass));
         }
 
         $this->parentPath = $parentPath;
@@ -58,6 +68,8 @@ class DefaultCustomerProvider implements CustomerProviderInterface
         }
 
         $this->namingScheme = $namingScheme;
+
+        $this->modelFactory = $modelFactory;
     }
 
     /**
@@ -90,7 +102,7 @@ class DefaultCustomerProvider implements CustomerProviderInterface
     public function getCustomerClassName()
     {
         $class = $this->getDiClassName();
-        $customer = new $class;
+        $customer = $this->modelFactory->build($class);
 
         return get_class($customer);
     }
@@ -116,14 +128,26 @@ class DefaultCustomerProvider implements CustomerProviderInterface
      */
     public function create(array $data = [])
     {
+        /** @var CustomerInterface|ElementInterface|Concrete $customer */
+        $customer = $this->createCustomerInstance();
+        $customer->setValues($data);
+        $customer->setPublished(true);
+        $this->applyObjectNamingScheme($customer);
+
+        return $customer;
+    }
+
+    /**
+     * Create a customer instance
+     *
+     * @return CustomerInterface
+     */
+    public function createCustomerInstance()
+    {
         $className = $this->getDiClassName();
 
         /** @var CustomerInterface|ElementInterface|Concrete $customer */
-        $customer = new $className;
-        $customer->setPublished(true);
-        $customer->setValues($data);
-        $this->applyObjectNamingScheme($customer);
-
+        $customer = $this->modelFactory->build($className);
         return $customer;
     }
 

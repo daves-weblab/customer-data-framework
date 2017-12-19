@@ -38,6 +38,7 @@ class PimcoreCustomerManagementFrameworkBundle extends AbstractPimcoreBundle
             '/bundles/pimcorecustomermanagementframework/js/config/conditions.js',
             '/bundles/pimcorecustomermanagementframework/js/config/actions.js',
             '/bundles/pimcorecustomermanagementframework/js/config/actions.js',
+            '/bundles/pimcorecustomermanagementframework/js/gdprDataProvider/customers.js',
             '/bundles/pimcorecustomermanagementframework/js/pimcore/report/custom/definitions/termSegmentBuilder.js'
         ];
     }
@@ -57,11 +58,9 @@ class PimcoreCustomerManagementFrameworkBundle extends AbstractPimcoreBundle
         $container->addCompilerPass(new NewsletterManagerPass());
     }
 
-    /**
-     * @return Installer
-     */
+
     public function getInstaller()
     {
-        return new Installer();
+        return $this->container->get(Installer::class);
     }
 }

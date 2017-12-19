@@ -11,7 +11,7 @@ segmentation, personalization and marketing automation. So it allows to aggregat
 enrich data, link social profiles, build audience segments, trigger events, personalize experience, execute marketing 
 automation and much more.
 
-Like Pimcore itself and die E-Commerce-Framework, the CMF is also a Framework for developers to develop customer management
+Like Pimcore itself and the E-Commerce-Framework, the CMF is also a Framework for developers to develop customer management
 solutions and is tightly integrated into Pimcore core functionality. 
 
 ## Provided Functionality in a Nutshell
@@ -20,7 +20,7 @@ solutions and is tightly integrated into Pimcore core functionality.
 - Customer Segmentation based on data, activities and other criteria
 - Duplicates detection and merging
 - SSO and connection to social profiles like Google, Facebook, Twitter, etc. 
-- Enhancement of Pimcores on-site Personalization
+- Enhancement of Pimcore's on-site personalization
 - Marketing Automation with built-in rule engine and triggers
 - Default integration to external newsletter systems like MailChimp
 - Rest API for integration of external systems for data import or data export
@@ -42,7 +42,7 @@ Following aspects are short cuts into the documentation for start working with t
 * [Working with integrated Single Sign On](./doc/18_Single_Sign_On.md)
 * [Built-In Marketing Automation Engine](./doc/22_ActionTrigger.md)
 * [Newsletter System Integration](./doc/24_NewsletterSync.md)
-* [Rest API Webservice](./doc/Webservice.md)
+* [Rest API Webservice](./doc/26_Webservice.md)
 
 
 ## Contributing and Development

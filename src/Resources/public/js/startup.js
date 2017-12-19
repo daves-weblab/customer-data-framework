@@ -28,11 +28,20 @@ pimcore.plugin.customermanagementframework = Class.create(pimcore.plugin.admin, 
         }
 
         // customer view
-        if (user.isAllowed('plugin_customermanagementframework_customerview')) {
+        if (user.isAllowed('plugin_cmf_perm_customerview')) {
             var customerViewPanelId = 'plugin_cmf_customerview';
-            var item = {
+
+            var menuOptions = pimcore.settings.cmf.shortcutFilterDefinitions.length ? {
+                cls: "pimcore_navigation_flyout",
+                shadow: false,
+                items: []
+            } : null;
+
+            var customerMenu = Ext.create('Ext.menu.Item', {
                 text: t('plugin_cmf_customerview'),
                 iconCls: 'pimcore_icon_customers',
+                hideOnClick: false,
+                menu: menuOptions,
                 handler: function () {
                     try {
                         pimcore.globalmanager.get(customerViewPanelId).activate();
@@ -49,14 +58,41 @@ pimcore.plugin.customermanagementframework = Class.create(pimcore.plugin.admin, 
                         );
                     }
                 }
-            };
+            });
 
             // add to menu
-            menuItems.add(item);
+            menuItems.add(customerMenu);
+
+            $(pimcore.settings.cmf.shortcutFilterDefinitions).each(function(){
+                var filterId = this.id;
+                var filterKey = 'plugin_cmf_customerview_filter_' + this.id;
+                var filterName = this.name;
+                var filterItem = {
+                    text: filterName,
+                    iconCls: 'pimcore_icon_customers',
+                    handler: function () {
+                        try {
+                            pimcore.globalmanager.get(filterKey).activate();
+                        }
+                        catch (e) {
+                            pimcore.globalmanager.add(
+                                filterKey,
+                                new pimcore.tool.genericiframewindow(
+                                    filterKey,
+                                    '/admin/customermanagementframework/customers/list?filterDefinition[id]=' + filterId,
+                                    'pimcore_icon_customers',
+                                    filterName
+                                )
+                            );
+                        }
+                    }
+                };
+                customerMenu.getMenu().add(filterItem);
+            });
         }
 
         // customer duplicates view
-        if (pimcore.settings.cmf.duplicatesViewEnabled && user.isAllowed('plugin_customermanagementframework_customerview')) {
+        if (pimcore.settings.cmf.duplicatesViewEnabled && user.isAllowed('plugin_cmf_perm_customerview')) {
             var customerDuplicateViewPanelId = 'plugin_cmf_customerduplicatesview';
             var item = {
                 text: t('plugin_cmf_customerduplicatesview'),
@@ -83,7 +119,7 @@ pimcore.plugin.customermanagementframework = Class.create(pimcore.plugin.admin, 
             menuItems.add(item);
         }
 
-        if (user.isAllowed('plugin_customermanagementframework_customer_automation_rules')) {
+        if (user.isAllowed('plugin_cmf_perm_customer_automation_rules')) {
             var customerAutomationRulesPanelId = 'plugin_cmf_customerautomationrules';
             var item = {
                 text: t('plugin_cmf_customerautomationrules'),
@@ -101,7 +137,7 @@ pimcore.plugin.customermanagementframework = Class.create(pimcore.plugin.admin, 
             menuItems.add(item);
         }
 
-        if (pimcore.settings.cmf.newsletterSyncEnabled && user.isAllowed('plugin_customermanagementframework_newsletter_enqueue_all_customers')) {
+        if (pimcore.settings.cmf.newsletterSyncEnabled && user.isAllowed('plugin_cmf_perm_newsletter_enqueue_all_customers')) {
             var item = {
                 text: t('plugin_cmf_newsletter_enqueue_all_customers'),
                 iconCls: 'pimcore_icon_newsletter_enqueue_all_customers',
@@ -265,47 +301,6 @@ pimcore.plugin.customermanagementframework = Class.create(pimcore.plugin.admin, 
         var tabPanel = element.tab.items.items[1];
         tabPanel.insert(tabPanel.items.length, this.segmentTab.getLayout());
         tabPanel.updateLayout();
-    },
-
-    preSaveDocument: function (element, type, task, only) {
-        this.saveSegmentAssignments(element, 'document', task, only);
-    },
-
-    preSaveAsset: function(element, type, task, only) {
-        this.saveSegmentAssignments(element, 'asset', task, only);
-    },
-
-    preSaveObject: function(element, type, task, only) {
-        this.saveSegmentAssignments(element, 'object', task, only);
-    },
-
-    saveSegmentAssignments: function (element, type, task, only) {
-        var segmentTab = this.segmentTab;
-        var breaksInheritance = segmentTab.breaksInheritance.items.items[0].checked;
-        var segmentIds = [];
-
-        segmentTab.assignedStore.data.items.forEach(function(item){
-            segmentIds.push(item.id);
-        });
-
-        Ext.Ajax.request(
-            {
-                url: "/admin/customermanagementframework/segment-assignment/assign",
-                method: "post",
-                params: {
-                    id: element.id,
-                    type: type,
-                    breaksInheritance: breaksInheritance,
-                    segmentIds: JSON.stringify(segmentIds)
-                },
-                success: function (response) {
-                    console.log(response.responseText);
-                },
-                failure: function(response) {
-                    pimcore.helpers.showNotification(t("error"), t("plugin_cmf_segment_assignment_error"), "error", response.responseText);
-                }
-            }
-        );
     }
 });
 

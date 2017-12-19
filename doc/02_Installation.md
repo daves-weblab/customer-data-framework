@@ -2,6 +2,8 @@
 
 This section describes the installation of the Customer Management Framework and the first steps of configuration.
 
+> Please note that Customer Management Framework requires MariaDB as database. I currently will not work with default MySQL. 
+
 ## Installation
 
 1) Add dependency for CMF to your composer.json and run composer update. 
@@ -56,7 +58,7 @@ Following options to prepare the customer class are available:
      `created_timestamp` and `application_counter` as numeric meta fields
   * `idEncoded`: input field
   
-  As starting point this [class definition](..) can be used. 
+  As starting point this [class definition](https://github.com/pimcore/customer-data-framework/blob/master/install/class_source/optional/class_Customer_export.json) can be used. 
  
  
 * When using customer objects as users for Symfony security: In this case the customer class needs to extend the 
@@ -93,5 +95,5 @@ See [CronJob Docs](./04_Cronjobs.md) for details.
 
 ## (Optional) Prerequisites for SSO
 
-If SSO functionality of CMF should be integrated, please follow the steps for [Integration of Single Sign On](./Single_Sign_On.md). 
+If SSO functionality of CMF should be integrated, please follow the steps for [Integration of Single Sign On](./18_Single_Sign_On.md). 
 

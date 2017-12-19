@@ -11,6 +11,11 @@ services:
         autowire: true
         autoconfigure: true
 
+    # auto-register all commands as services
+    CustomerManagementFrameworkBundle\Command\:
+        resource: '../../Command'
+        public: false
+
     CustomerManagementFrameworkBundle\CustomerSaveManager\SaveOptions:
         arguments:
           - true
@@ -55,7 +60,6 @@ services:
         arguments:
             - '%pimcore_customer_management_framework.segment_manager.segmentFolder.calculated%'
             - '%pimcore_customer_management_framework.segment_manager.segmentFolder.manual%'
-            - '%cmf.segmentAssignment.table.index%'
 
     CustomerManagementFrameworkBundle\SegmentManager\SegmentBuilderExecutor\SegmentBuilderExecutorInterface:
         class: CustomerManagementFrameworkBundle\SegmentManager\SegmentBuilderExecutor\DefaultSegmentBuilderExecutor
@@ -80,8 +84,9 @@ services:
     CustomerManagementFrameworkBundle\SegmentAssignment\Indexer\IndexerInterface:
         class: CustomerManagementFrameworkBundle\SegmentAssignment\Indexer\Indexer
         arguments:
+            $segmentAssignmentTable: '%cmf.segmentAssignment.table.raw%'
             $segmentAssignmentIndexTable: '%cmf.segmentAssignment.table.index%'
-            $segmentAssignmentQueueTable: '%cmf.segmentassignment.table.queue%'
+            $segmentAssignmentQueueTable: '%cmf.segmentAssignment.table.queue%'
 
     CustomerManagementFrameworkBundle\SegmentAssignment\TypeMapper\TypeMapperInterface:
         class: CustomerManagementFrameworkBundle\SegmentAssignment\TypeMapper\TypeMapper
@@ -93,10 +98,25 @@ services:
             $segmentAssignmentQueueTable: '%cmf.segmentAssignment.table.queue%'
             $segmentAssignmentIndexTable: '%cmf.segmentAssignment.table.index%'
 
+    CustomerManagementFrameworkBundle\SegmentAssignment\QueueBuilder\QueueBuilderInterface:
+        class: CustomerManagementFrameworkBundle\SegmentAssignment\QueueBuilder\DefaultQueueBuilder
+        arguments:
+            $segmentAssignmentQueueTable: '%cmf.segmentAssignment.table.queue%'
+
+    CustomerManagementFrameworkBundle\SegmentAssignment\StoredFunctions\StoredFunctionsInterface:
+        class: CustomerManagementFrameworkBundle\SegmentAssignment\StoredFunctions\DefaultStoredFunctions
+
+    CustomerManagementFrameworkBundle\SegmentAssignment\QueryService\QueryServiceInterface:
+        class: CustomerManagementFrameworkBundle\SegmentAssignment\QueryService\DefaultQueryService
+        arguments:
+            $segmentAssignmentIndexTable: '%cmf.segmentassignment.table.index%'
+
     CustomerManagementFrameworkBundle\Maintenance\MaintenanceWorker:
         arguments:
             $serviceConfiguration:
+                'executeSegmentBuilderMaintenance': '@CustomerManagementFrameworkBundle\SegmentManager\SegmentBuilderExecutor\SegmentBuilderExecutorInterface'
                 'processQueue': '@CustomerManagementFrameworkBundle\SegmentAssignment\Indexer\IndexerInterface'
+                'cleanUpFilterDefinitions': '@CustomerManagementFrameworkBundle\CustomerView\FilterDefinition\Maintenance'
 
     cmf.logger:
         alias: monolog.logger.cmf
@@ -114,10 +134,9 @@ services:
     cmf.activity_store:
         alias: CustomerManagementFrameworkBundle\ActivityStore\ActivityStoreInterface
 
-    CustomerManagementFrameworkBundle\ActivityStore\ActivityManagerInterface:
-        class: CustomerManagementFrameworkBundle\ActivityManager\DefaultActivityManager
-    cmf.activity_manager:
-        alias: CustomerManagementFrameworkBundle\ActivityStore\ActivityManagerInterface
+    cmf.activity_manager: '@CustomerManagementFrameworkBundle\ActivityManager\ActivityManagerInterface'
+    CustomerManagementFrameworkBundle\ActivityManager\ActivityManagerInterface: '@CustomerManagementFrameworkBundle\ActivityManager\DefaultActivityManager'
+    CustomerManagementFrameworkBundle\ActivityManager\DefaultActivityManager: ~
 
     cmf.activity_store_entry:
         class: CustomerManagementFrameworkBundle\Model\ActivityStoreEntry\DefaultActivityStoreEntry
@@ -143,9 +162,14 @@ services:
             - '@cmf.view_formatter'
 
 
-    cmf.customer_view:
+    CustomerManagementFrameworkBundle\CustomerView\CustomerViewInterface:
         class: CustomerManagementFrameworkBundle\CustomerView\DefaultCustomerView
         arguments: ['@cmf.view_formatter']
+
+    cmf.customer_view:
+        alias: 'CustomerManagementFrameworkBundle\CustomerView\CustomerViewInterface'
+
+    CustomerManagementFrameworkBundle\CustomerView\FilterDefinition\Maintenance: ~
 
     cmf.potential_duplicate_item:
         class: CustomerManagementFrameworkBundle\Model\CustomerDuplicates\PotentialDuplicateItem
@@ -190,7 +214,28 @@ services:
     cmf.rest.deletions_handler:
         class: CustomerManagementFrameworkBundle\RESTApi\DeletionsHandler
 
-    cmf.encryption_service:
-        class: CustomerManagementFrameworkBundle\Encryption\DefaultEncryptionService
+    cmf.encryption_service: '@CustomerManagementFrameworkBundle\Encryption\EncryptionServiceInterface'
+    CustomerManagementFrameworkBundle\Encryption\EncryptionServiceInterface: '@CustomerManagementFrameworkBundle\Encryption\DefaultEncryptionService'
+    CustomerManagementFrameworkBundle\Encryption\DefaultEncryptionService:
         arguments:
             - '%pimcore_customer_management_framework.encryption.secret%'
+
+    # The migration installer needs the bundle it is operating on upon construction to be able to build its migration configuration.
+    # As bundles can't be directly used as service argument, we need to make use of the expression language to fetch the bundle
+    # from the kernel upon construction.
+    CustomerManagementFrameworkBundle\Installer:
+        public: true
+        arguments:
+            # fetch the bundle via expression language
+            $bundle: "@=service('kernel').getBundle('PimcoreCustomerManagementFrameworkBundle')"
+
+
+    cmf.custom_report.adapter.term_segment_builder:
+        class: Pimcore\Model\Tool\CustomReport\Adapter\DefaultCustomReportAdapterFactory
+        arguments:
+          - 'CustomerManagementFrameworkBundle\Adapter\TermSegmentBuilder'
+
+    CustomerManagementFrameworkBundle\GDPR\DataProvider\Customers:
+        public: false
+        arguments:
+            $config: '%pimcore.gdpr-data-extrator.customers%'

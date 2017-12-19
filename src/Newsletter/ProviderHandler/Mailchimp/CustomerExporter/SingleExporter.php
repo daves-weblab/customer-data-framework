@@ -134,8 +134,6 @@ class SingleExporter extends AbstractExporter
 
             return true;
         } else {
-            p_r($entry);
-
             $this->getLogger()->error(
                 sprintf(
                     '[MailChimp][CUSTOMER %s][%s] Export failed: %s %s',
@@ -158,16 +156,16 @@ class SingleExporter extends AbstractExporter
         $exportService = $this->exportService;
         $apiClient = $exportService->getApiClient();
 
-        /* if the email address changes and the customer is not subscribed in mailchimp we have to delete and recreate it
+        /* if the email address changes we have to delete and recreate it
            as mailchimp does only allow updating of email addresses for subscribed customers */
-        if ($customer->getEmail() != $item->getEmail() && $mailchimpProviderHandler->getMailchimpStatus($customer) != Mailchimp::STATUS_SUBSCRIBED) {
+        if ($customer->getEmail() != $item->getEmail()) {
             $apiClient->delete(
                 $exportService->getListResourceUrl($mailchimpProviderHandler->getListId(), sprintf('members/%s', $remoteId))
             );
             if ($apiClient->success()) {
                 $this->getLogger()->notice(
                     sprintf(
-                        '[MailChimp][CUSTOMER %s][%s] Deletion and recreation needed as email address changed and the status was not "subscribed". Deletion successfull. Remote ID is %s',
+                        '[MailChimp][CUSTOMER %s][%s] Deletion and recreation needed as email address changed. Deletion successfull. Remote ID is %s',
                         $customer->getId(),
                         $mailchimpProviderHandler->getShortcut(),
                         $remoteId
@@ -208,40 +206,6 @@ class SingleExporter extends AbstractExporter
 
             // change the remote id to the new/current email address => recreate the customer with the new email/ID
             $remoteId = $this->apiClient->subscriberHash($customer->getEmail());
-        } elseif ($customer->getEmail() != $item->getEmail()) {
-            $this->getLogger()->info(
-                sprintf(
-                    '[MailChimp][CUSTOMER %s][%s] Check if subscriber with old email exists. Remote ID is %s.',
-                    $customer->getId(),
-                    $mailchimpProviderHandler->getShortcut(),
-                    $remoteId
-                ),
-                [
-                    'relatedObject' => $customer
-                ]
-            );
-
-            $apiClient->get(
-                $exportService->getListResourceUrl($mailchimpProviderHandler->getListId(), sprintf('members/%s', $remoteId))
-            );
-
-            /* if the old email does not exist anymore it was already deleted or updated previously
-               => move to the current email/ID and update the customer with the current ID */
-            if (!$apiClient->success() && $apiClient->getLastResponse()['headers']['http_code'] == 404) {
-                $remoteId = $this->apiClient->subscriberHash($customer->getEmail());
-
-                $this->getLogger()->info(
-                    sprintf(
-                        '[MailChimp][CUSTOMER %s][%s] Subscriber with old email does not exist anymore. Create/update subscriber with new email. Remote ID is %s.',
-                        $customer->getId(),
-                        $mailchimpProviderHandler->getShortcut(),
-                        $remoteId
-                    ),
-                    [
-                        'relatedObject' => $customer
-                    ]
-                );
-            }
         }
 
         return $remoteId;
@@ -256,6 +220,19 @@ class SingleExporter extends AbstractExporter
     {
         $exportService = $this->exportService;
         $apiClient = $this->apiClient;
+
+        if($mailchimpProviderHandler->doesOtherSubscribedCustomerWithEmailExist($customer->getEmail(), $customer->getId())) {
+            $this->getLogger()->debug(
+                sprintf(
+                    '[MailChimp][CUSTOMER %s][%s] Skip deletion of customer as another subscribed customer with email %s exists.',
+                    $customer->getId(),
+                    $mailchimpProviderHandler->getShortcut(),
+                    $customer->getEmail()
+                )
+            );
+            $item->setSuccessfullyProcessed(true);
+            return;
+        }
 
         // entry to send to API
         $entry = $mailchimpProviderHandler->buildEntry($customer);
@@ -332,6 +309,19 @@ class SingleExporter extends AbstractExporter
     {
         $exportService = $this->exportService;
         $apiClient = $this->apiClient;
+
+        if($mailchimpProviderHandler->doesOtherSubscribedCustomerWithEmailExist($item->getEmail(), $item->getCustomerId())) {
+            $this->getLogger()->info(
+                sprintf(
+                    '[MailChimp][CUSTOMER %s][%s] Deletion skipped as another subscribed customer with the same email exists.',
+                    $item->getCustomerId(),
+                    $mailchimpProviderHandler->getShortcut()
+                )
+            );
+
+            $item->setSuccessfullyProcessed(true);
+            return;
+        }
 
         // entry to send to API
         $remoteId = $this->apiClient->subscriberHash($item->getEmail());

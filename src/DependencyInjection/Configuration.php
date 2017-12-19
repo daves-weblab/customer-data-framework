@@ -48,6 +48,7 @@ class Configuration implements ConfigurationInterface
         $rootNode->append($this->buildNewsletterNode());
         $rootNode->append($this->buildActivityUrlTrackerNode());
         $rootNode->append($this->buildSegmentAssignmentClassPermission());
+        $rootNode->append($this->buildGDPRConfigNode());
 
         return $treeBuilder;
     }
@@ -214,6 +215,10 @@ class Configuration implements ConfigurationInterface
                     ->defaultNull()
                     ->example('{countryCode}/{zip}/{firstname}-{lastname}')
                     ->info('If a naming scheme is configured customer objects will be automatically renamend and moved to the configured folder structure as soon as the naming scheme gets applied.')
+                ->end()
+                ->scalarNode('newCustomersTempDir')
+                    ->defaultValue('/customers/_temp')
+                    ->info('parent folder for customers which are created via the "new customer" button in the customer list view')
                 ->end()
         ;
 
@@ -515,5 +520,37 @@ class Configuration implements ConfigurationInterface
             ->end();
 
         return $assignment;
+    }
+
+    private function buildGDPRConfigNode() {
+
+        $treeBuilder = new TreeBuilder();
+
+        $dataObjects = $treeBuilder->root('gdprDataProvider');
+        $dataObjects
+            ->addDefaultsIfNotSet()
+            ->info('Settings for GDPR DataProvider for customers');
+
+        $dataObjects
+            ->children()
+                ->arrayNode('customer')
+                    ->addDefaultsIfNotSet()
+                    ->info('Configure which classes should be considered, array key is class name')
+                    ->children()
+                        ->booleanNode("allowDelete")
+                            ->info("Allow delete of objects directly in preview grid.")
+                            ->defaultFalse()
+                        ->end()
+                        ->arrayNode('includedRelations')
+                            ->info('List relation attributes that should be included recursively into export.')
+                            ->prototype('scalar')->end()
+                        ->end()
+                    ->end()
+                ->end()
+            ->end()
+        ;
+
+        return $dataObjects;
+
     }
 }

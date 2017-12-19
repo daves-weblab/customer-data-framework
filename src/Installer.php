@@ -15,13 +15,21 @@
 
 namespace CustomerManagementFrameworkBundle;
 
-use Pimcore\Extension\Bundle\Installer\AbstractInstaller;
+use Doctrine\DBAL\Migrations\Version;
+use Doctrine\DBAL\Schema\Schema;
+use Pimcore\Db;
+use Pimcore\Extension\Bundle\Installer\MigrationInstaller;
 use Pimcore\Logger;
-use Pimcore\Model\Object\Objectbrick\Definition;
 
-class Installer extends AbstractInstaller
+class Installer extends MigrationInstaller
 {
-    public function install()
+    public function getMigrationVersion(): string
+    {
+        return '20171207150300';
+    }
+
+
+    public function migrateInstall(Schema $schema, Version $version)
     {
         $this->installPermissions();
         $this->installDatabaseTables();
@@ -31,12 +39,9 @@ class Installer extends AbstractInstaller
         return true;
     }
 
-    public function isInstalled()
+    public function migrateUninstall(Schema $schema, Version $version)
     {
 
-        $result = \Pimcore\Db::get()->fetchAll('SHOW TABLES LIKE "plugin_cmf_segment_assignment"');
-
-        return !empty($result);
     }
 
     public function canBeInstalled()
@@ -55,10 +60,11 @@ class Installer extends AbstractInstaller
     public function installPermissions()
     {
         $permissions = [
-            'plugin_customermanagementframework_activityview',
-            'plugin_customermanagementframework_customerview',
-            'plugin_customermanagementframework_customer_automation_rules',
-            'plugin_customermanagementframework_newsletter_enqueue_all_customers',
+            'plugin_cmf_perm_activityview',
+            'plugin_cmf_perm_customerview',
+            'plugin_cmf_perm_customerview_admin',
+            'plugin_cmf_perm_customer_automation_rules',
+            'plugin_cmf_perm_newsletter_enqueue_all_customers',
         ];
 
         foreach ($permissions as $key) {
@@ -74,7 +80,7 @@ class Installer extends AbstractInstaller
 
     public function installDatabaseTables()
     {
-        \Pimcore\Db::get()->query(
+        Db::get()->query(
             'CREATE TABLE IF NOT EXISTS `plugin_cmf_activities` (
               `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
               `customerId` int(11) unsigned NOT NULL,
@@ -94,7 +100,7 @@ class Installer extends AbstractInstaller
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8'
         );
 
-        \Pimcore\Db::get()->query(
+        Db::get()->query(
             'CREATE TABLE IF NOT EXISTS `plugin_cmf_deletions` (
               `id` int(11) unsigned NOT NULL,
               `entityType` char(20) NOT NULL,
@@ -104,14 +110,14 @@ class Installer extends AbstractInstaller
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8'
         );
 
-        \Pimcore\Db::get()->query(
+        Db::get()->query(
             'CREATE TABLE IF NOT EXISTS `plugin_cmf_segmentbuilder_changes_queue` (
               `customerId` int(11) unsigned NOT NULL,
               UNIQUE KEY `customerId` (`customerId`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8'
         );
 
-        \Pimcore\Db::get()->query(
+        Db::get()->query(
             'CREATE TABLE IF NOT EXISTS `plugin_cmf_actiontrigger_actions` (
               `id` int(20) unsigned NOT NULL AUTO_INCREMENT,
               `ruleId` int(20) unsigned NOT NULL,
@@ -125,7 +131,7 @@ class Installer extends AbstractInstaller
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8'
         );
 
-        \Pimcore\Db::get()->query(
+        Db::get()->query(
             "CREATE TABLE IF NOT EXISTS `plugin_cmf_actiontrigger_rules` (
               `id` int(20) unsigned NOT NULL AUTO_INCREMENT,
               `name` varchar(50) DEFAULT NULL,
@@ -141,7 +147,7 @@ class Installer extends AbstractInstaller
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8"
         );
 
-        \Pimcore\Db::get()->query(
+        Db::get()->query(
             'CREATE TABLE IF NOT EXISTS `plugin_cmf_actiontrigger_queue` (
               `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
               `customerId` int(11) unsigned NOT NULL,
@@ -155,7 +161,7 @@ class Installer extends AbstractInstaller
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8'
         );
 
-        \Pimcore\Db::get()->query(
+        Db::get()->query(
             "CREATE TABLE IF NOT EXISTS `plugin_cmf_sequence_numbers` (
               `name` char(50) NOT NULL,
               `number` int(11) NOT NULL DEFAULT '0',
@@ -163,7 +169,7 @@ class Installer extends AbstractInstaller
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8"
         );
 
-        \Pimcore\Db::get()->query(
+        Db::get()->query(
             "CREATE TABLE IF NOT EXISTS `plugin_cmf_duplicatesindex` (
               `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
               `duplicateData` text NOT NULL,
@@ -181,7 +187,7 @@ class Installer extends AbstractInstaller
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8"
         );
 
-        \Pimcore\Db::get()->query(
+        Db::get()->query(
             'CREATE TABLE IF NOT EXISTS `plugin_cmf_duplicatesindex_customers` (
               `duplicate_id` int(11) unsigned NOT NULL,
               `customer_id` int(11) unsigned NOT NULL,
@@ -190,7 +196,7 @@ class Installer extends AbstractInstaller
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8'
         );
 
-        \Pimcore\Db::get()->query(
+        Db::get()->query(
             'CREATE TABLE IF NOT EXISTS `plugin_cmf_duplicates_false_positives` (
               `row1` text NOT NULL,
               `row2` text NOT NULL,
@@ -199,7 +205,7 @@ class Installer extends AbstractInstaller
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8'
         );
 
-        \Pimcore\Db::get()->query(
+        Db::get()->query(
             "CREATE TABLE IF NOT EXISTS `plugin_cmf_potential_duplicates` (
               `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
               `duplicateCustomerIds` varchar(255) NOT NULL DEFAULT '',
@@ -213,7 +219,7 @@ class Installer extends AbstractInstaller
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8"
         );
 
-        \Pimcore\Db::get()->query(
+        Db::get()->query(
             'CREATE TABLE IF NOT EXISTS `plugin_cmf_newsletter_queue` (
               `customerId` int(11) unsigned NOT NULL,
               `email` varchar(255) DEFAULT NULL,
@@ -224,12 +230,26 @@ class Installer extends AbstractInstaller
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8'
         );
 
-        $sqlPath = __DIR__ . '/Resources/sql/segmentAssignment/';
-        $sqlFileNames = ['datamodel.sql', 'storedFunctionDocument.sql', 'storedFunctionAsset.sql', 'storedFunctionObject.sql'];
 
-        foreach ($sqlFileNames as $fileName) {
-            $statement = file_get_contents($sqlPath.$fileName);
-            \Pimcore\Db::get()->query($statement);
+        $sqlFiles = [
+            __DIR__ . '/Resources/sql/filterDefinition/' => [
+                'datamodel.sql'
+            ],
+            __DIR__ . '/Resources/sql/segmentAssignment/' => [
+                'datamodel.sql',
+                'storedFunctionDocument.sql',
+                'storedFunctionAsset.sql',
+                'storedFunctionObject.sql',
+            ]
+        ];
+
+        $db = Db::get();
+
+        foreach ($sqlFiles as $folder => $files) {
+            foreach($files as $file) {
+                $statement = file_get_contents($folder.$file);
+                $db->query($statement);
+            }
         }
     }
 

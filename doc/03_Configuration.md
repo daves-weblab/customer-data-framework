@@ -76,7 +76,6 @@ services:
 e.g. in `config.yml`: 
 
 ```yaml
-
 pimcore_customer_management_framework:
     # Enable/Disable SSO oauth client. If enabled additional steps are necessary, see SSO docs for details. 
     oauth_client:
@@ -123,6 +122,9 @@ pimcore_customer_management_framework:
 
         # If a naming scheme is configured customer objects will be automatically renamend and moved to the configured folder structure as soon as the naming scheme gets applied.
         namingScheme:         '{countryCode}/{zip}/{firstname}-{lastname}' 
+        
+        # Parent folder for customers which are created via the "new customer" button in the customer list view
+        newCustomersTempDir:         /customers/_temp
 
     # Configuration of customer save manager
     customer_save_validator:
@@ -207,19 +209,31 @@ pimcore_customer_management_framework:
                    - countryCode
                    - idEncoded
               
-        # TODO add description here      
+        # Configuration of filters in the customer list view. The properties configured here will 
+        # be handled if passed as ?filter[] query parameter.
         filter_properties:
+            # Filter fields which must match exactly.
             equals:
-
+                # ?filter[id]=8 will result in a SQL condition of "WHERE o_id=8"
                 id:                  o_id
                 active:              active
+                
+            # Searched fields in customer view search filters
+            # (enhanced search syntax (AND/OR/!/*...) could be used in these fields).
+            # Search will be applied to all fields in the list, e.g. 
+            # ?filter[name]=val will result in a SQL condition of "WHERE (firstname LIKE "%val%" OR lastname LIKE "%val")
+            # See https://github.com/pimcore/search-query-parser for detailed search syntax. 
             search:
+                # email search filter
                 email:
                   - email
+                  
+                # name search filter
                 name:
                   - firstname
                   - lastname
                   
+                # main search filter
                 search:
                   - o_id
                   - idEncoded
@@ -243,11 +257,11 @@ pimcore_customer_management_framework:
             - email
             - firstname
             - lastname
-          
         
         duplicates_view:
             enabled: true # the feature will be visible in the backend only if it is enabled
-            # TODO add description here
+            # Visible fields in the customer duplicates view. 
+            # Each single group/array is one separate column in the view table.
             listFields:
               - [id]
               - [email]
@@ -255,54 +269,56 @@ pimcore_customer_management_framework:
               - [street]
               - [zip, city]
               
-        # TODO add description here
+        # Index used for a global search of customer duplicates. 
+        # Matching field combinations can be configured here.
+        # See "Customer Duplicates Service" docs chapter for more details.
         duplicates_index:
             enableDuplicatesIndex: false
             duplicateCheckFields:
                 - firstname:
-                  soundex: true
-                  metaphone: true
-                  similarity: \CustomerManagementFrameworkBundle\DataSimilarityMatcher\SimilarText
-                
-                zip:
-                  similarity: \CustomerManagementFrameworkBundle\DataSimilarityMatcher\Zip
-                
-                street:
-                  soundex: true
-                  metaphone: true
-                  similarity: \CustomerManagementFrameworkBundle\DataSimilarityMatcher\SimilarText
-                
-                birthDate:
-                  similarity: \CustomerManagementFrameworkBundle\DataSimilarityMatcher\BirthDate::class
+                      soundex: true
+                      metaphone: true
+                      similarity: \CustomerManagementFrameworkBundle\DataSimilarityMatcher\SimilarText
+
+                  zip:
+                      similarity: \CustomerManagementFrameworkBundle\DataSimilarityMatcher\Zip
+
+                  street:
+                      soundex: true
+                      metaphone: true
+                      similarity: \CustomerManagementFrameworkBundle\DataSimilarityMatcher\SimilarText
+
+                  birthDate:
+                      similarity: \CustomerManagementFrameworkBundle\DataSimilarityMatcher\BirthDate::class
                 
                 - lastname:
-                  soundex: true
-                  metaphone: true
-                  similarity: \CustomerManagementFrameworkBundle\DataSimilarityMatcher\SimilarText
-                
-                firstname:
-                  soundex: true
-                  metaphone: true
-                  similarity: \CustomerManagementFrameworkBundle\DataSimilarityMatcher\SimilarText
-                
-                zip:
-                  similarity: \CustomerManagementFrameworkBundle\DataSimilarityMatcher\Zip
-                
-                city:
-                  soundex: true
-                  metaphone: true
-                  similarity: \CustomerManagementFrameworkBundle\DataSimilarityMatcher\SimilarText
-                
-                street:
-                  soundex: true
-                  metaphone: true
-                  similarity: \CustomerManagementFrameworkBundle\DataSimilarityMatcher\SimilarText
+                      soundex: true
+                      metaphone: true
+                      similarity: \CustomerManagementFrameworkBundle\DataSimilarityMatcher\SimilarText
+
+                  firstname:
+                      soundex: true
+                      metaphone: true
+                      similarity: \CustomerManagementFrameworkBundle\DataSimilarityMatcher\SimilarText
+
+                  zip:
+                      similarity: \CustomerManagementFrameworkBundle\DataSimilarityMatcher\Zip
+
+                  city:
+                      soundex: true
+                      metaphone: true
+                      similarity: \CustomerManagementFrameworkBundle\DataSimilarityMatcher\SimilarText
+
+                  street:
+                      soundex: true
+                      metaphone: true
+                      similarity: \CustomerManagementFrameworkBundle\DataSimilarityMatcher\SimilarText
                 
                 
                 - email:
-                  metaphone: true
-                  similarity: \CustomerManagementFrameworkBundle\DataSimilarityMatcher\SimilarText
-                  similarityThreshold: 90
+                      metaphone: true
+                      similarity: \CustomerManagementFrameworkBundle\DataSimilarityMatcher\SimilarText
+                      similarityThreshold: 90
     
             dataTransformers:
               street: \CustomerManagementFrameworkBundle\DataTransformer\DuplicateIndex\Street
@@ -310,5 +326,4 @@ pimcore_customer_management_framework:
               city: \CustomerManagementFrameworkBundle\DataTransformer\DuplicateIndex\Simplify
               lastname: \CustomerManagementFrameworkBundle\DataTransformer\DuplicateIndex\Simplify
               birthDate: \CustomerManagementFrameworkBundle\DataTransformer\DuplicateIndex\Date
-
 ```

@@ -29,26 +29,21 @@ class ActivitiesController extends \Pimcore\Bundle\AdminBundle\Controller\AdminC
 {
     public function onKernelController(FilterControllerEvent $event)
     {
-        //$this->checkPermission('plugin_customermanagementframework_activityview');
+        $this->checkPermission('plugin_cmf_perm_activityview');
     }
 
     /**
      * @param Request $request
      * @Route("/list")
      */
-    public function listAction(Request $request)
+    public function listAction(Request $request, CustomerProviderInterface $customerProvider)
     {
         $types = null;
         $type = null;
         $activities = null;
         $paginator = null;
 
-        /**
-         * @var CustomerProviderInterface $customerProvier
-         */
-        $customerProvier = \Pimcore::getContainer()->get('cmf.customer_provider');
-
-        if ($customer = $customerProvier->getById($request->get('customerId'))) {
+        if ($customer = $customerProvider->getById($request->get('customerId'))) {
             $list = \Pimcore::getContainer()->get('cmf.activity_store')->getActivityList();
             $list->setCondition('customerId = ' . $customer->getId());
             $list->setOrderKey('activityDate');

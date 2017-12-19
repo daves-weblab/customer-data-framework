@@ -9,8 +9,8 @@
  * Full copyright and license information is available in
  * LICENSE.md which is distributed with this source code.
  *
- *  @copyright  Copyright (c) Pimcore GmbH (http://www.pimcore.org)
- *  @license    http://www.pimcore.org/license     GPLv3 and PEL
+ * @copyright  Copyright (c) Pimcore GmbH (http://www.pimcore.org)
+ * @license    http://www.pimcore.org/license     GPLv3 and PEL
  */
 
 namespace CustomerManagementFrameworkBundle\SegmentAssignment\SegmentAssigner;
@@ -159,22 +159,20 @@ class SegmentAssigner implements SegmentAssignerInterface
     public function assignById(string $elementId, string $type, bool $breaksInheritance, array $segmentIds): bool
     {
         try {
-            $formatArguments = [
-                1 => $this->getSegmentAssignmentTable(),
-                2 => $this->getSegmentAssignmentQueueTable(),
-                3 => $elementId,
-                4 => $type,
-                5 => (int) $breaksInheritance,
-                6 => join(',', $segmentIds)];
+            $statement = "INSERT INTO `{$this->getSegmentAssignmentTable()}` (`elementId`, `elementType`, `segments`, `breaksInheritance`, `inPreparation`) " .
+                "VALUES (:elementId, :elementType, :segmentIds, :breaksInheritance, 1) " .
+                "ON DUPLICATE KEY UPDATE `segments` = :segmentIds, `breaksInheritance` = :breaksInheritance, `inPreparation` = 1;";
 
-            $statement = vsprintf(
-                'START TRANSACTION;'.
-                'INSERT INTO `%1$s` (`elementId`, `elementType`, `breaksInheritance`, `segments`) VALUES (%3$s, "%4$s", %5$s, "%6$s") ON DUPLICATE KEY UPDATE `breaksInheritance` = %5$s, `segments` = "%6$s";'.
-                'INSERT INTO `%2$s` (`elementId`, `elementType`) VALUES (%3$s, "%4$s") ON DUPLICATE KEY UPDATE `elementId` = `elementId`;'.
-                'COMMIT;', $formatArguments);
+            $this->db->beginTransaction();
 
-            $this->getDb()->query($statement);
-            $this->enqueueChildren($elementId, $type);
+            $this->db->executeQuery($statement, [
+                'elementId' => $elementId,
+                'elementType' => $type,
+                'segmentIds' => join(',', $segmentIds),
+                'breaksInheritance' => (int)$breaksInheritance
+            ]);
+
+            $this->db->commit();
 
             return true;
         } catch (\Throwable $exception) {
@@ -190,55 +188,22 @@ class SegmentAssigner implements SegmentAssignerInterface
     public function removeElementById(string $elementId, string $type): bool
     {
         try {
-            $deletePattern = 'DELETE FROM %s WHERE `elementId` = %s AND `elementType` = "%s";';
+            $deletePattern = 'DELETE FROM %s WHERE `elementId` = :elementId AND `elementType` = :elementType; ';
 
-            $formatArguments = [
-                1 => sprintf($deletePattern, $this->getSegmentAssignmentTable(), $elementId, $type),
-                2 => sprintf($deletePattern, $this->getSegmentAssignmentQueueTable(), $elementId, $type),
-                3 => sprintf($deletePattern, $this->getSegmentAssignmentIndexTable(), $elementId, $type),
-            ];
+            $statement = sprintf($deletePattern, $this->getSegmentAssignmentTable()) .
+                sprintf($deletePattern, $this->getSegmentAssignmentQueueTable()) .
+                sprintf($deletePattern, $this->getSegmentAssignmentIndexTable());
 
-            $statement = vsprintf('START TRANSACTION;' .
-                '%1$s' .
-                '%2$s' .
-                '%3$s' .
-                'COMMIT;', $formatArguments);
+            $this->getDb()->beginTransaction();
 
-            $this->getDb()->query($statement);
+            $this->getDb()->executeQuery($statement,
+                [
+                    'elementId' => $elementId,
+                    'elementType' => $type
+                ]
+            );
 
-            return true;
-        } catch (\Throwable $exception) {
-            Logger::error($exception->getMessage());
-
-            return false;
-        }
-    }
-
-    /**
-     * @inheritdoc
-     */
-    public function enqueueChildren(string $elementId, string $type): bool
-    {
-        try {
-            $formatArguments = [
-                1 => $this->getSegmentAssignmentQueueTable(),
-                2 => $type === 'object' ? 'o_id' : 'id',
-                3 => $type,
-                4 => $type . 's',
-                5 => $type === 'object' ? 'o_path' : 'path',
-                6 => $type === 'object' ? 'o_key' : 'key',
-                7 => $elementId
-            ];
-
-            $enqueueStatement = vsprintf('START TRANSACTION; ' .
-                'INSERT INTO `%1$s` (`elementId`, `elementType`) ' .
-                'SELECT `%2$s` AS elementId, "%3$s" AS elementType FROM `%4$s` ' .
-                'WHERE `%5$s` LIKE CONCAT( ' .
-                    '(SELECT CONCAT(`%5$s`, `%6$s`) FROM `%4$s` WHERE `%2$s` = "%7$s")' .
-                ', "%%") ON DUPLICATE KEY UPDATE `elementId` = `elementId`; ' .
-                'COMMIT;', $formatArguments);
-
-            $this->getDb()->query($enqueueStatement);
+            $this->getDb()->commit();
 
             return true;
         } catch (\Throwable $exception) {
