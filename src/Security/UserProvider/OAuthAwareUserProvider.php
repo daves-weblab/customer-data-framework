@@ -17,11 +17,11 @@ declare(strict_types=1);
 
 namespace CustomerManagementFrameworkBundle\Security\UserProvider;
 
-use CustomerManagementFrameworkBundle\Security\OAuth\Exception\AccountNotActiveException;
 use CustomerManagementFrameworkBundle\Security\OAuth\Exception\AccountNotLinkedException;
 use CustomerManagementFrameworkBundle\Security\SsoIdentity\SsoIdentityServiceInterface;
 use HWI\Bundle\OAuthBundle\OAuth\Response\UserResponseInterface;
 use HWI\Bundle\OAuthBundle\Security\Core\User\OAuthAwareUserProviderInterface;
+use Symfony\Component\Security\Core\Exception\DisabledException;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Security\Core\User\UserProviderInterface;
 
@@ -73,8 +73,8 @@ class OAuthAwareUserProvider implements UserProviderInterface, OAuthAwareUserPro
         }
 
         if(!$user->getActive()) {
-            $exception = new AccountNotActiveException();
-            $exception->setCustomer($user);
+            $exception = new DisabledException();
+            $exception->setUser($user);
 
             throw $exception;
         }

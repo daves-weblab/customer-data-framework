@@ -17,6 +17,7 @@ namespace CustomerManagementFrameworkBundle\Security\UserProvider;
 
 use CustomerManagementFrameworkBundle\CustomerProvider\CustomerProviderInterface;
 use Pimcore\Model\DataObject\AbstractObject;
+use Symfony\Component\Security\Core\Exception\DisabledException;
 use Symfony\Component\Security\Core\Exception\UnsupportedUserException;
 use Symfony\Component\Security\Core\Exception\UsernameNotFoundException;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -48,10 +49,17 @@ class CustomerObjectUserProvider implements UserProviderInterface
     public function loadUserByUsername($username)
     {
         $list = $this->customerProvider->getList();
-        $list->setCondition(sprintf('active = 1 and %s = ?', $this->usernameField), $username);
+        $list->setCondition(sprintf('%s = ?', $this->usernameField), $username);
 
         if (!$customer = $list->current()) {
             throw new UsernameNotFoundException(sprintf('Customer "%s" was not found', $username));
+        }
+
+        if(!$customer->getActive()) {
+            $exception = new DisabledException();
+            $exception->setUser($customer);
+
+            throw $exception;
         }
 
         return $customer;

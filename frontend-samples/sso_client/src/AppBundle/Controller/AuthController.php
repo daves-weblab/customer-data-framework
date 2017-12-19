@@ -18,7 +18,6 @@ use CustomerManagementFrameworkBundle\CustomerProvider\CustomerProviderInterface
 use CustomerManagementFrameworkBundle\CustomerSaveValidator\Exception\DuplicateCustomerException;
 use CustomerManagementFrameworkBundle\Model\CustomerInterface;
 use CustomerManagementFrameworkBundle\Security\Authentication\LoginManagerInterface;
-use CustomerManagementFrameworkBundle\Security\OAuth\Exception\AccountNotActiveException;
 use CustomerManagementFrameworkBundle\Security\OAuth\Exception\AccountNotLinkedException;
 use CustomerManagementFrameworkBundle\Security\OAuth\OAuthRegistrationHandler;
 use HWI\Bundle\OAuthBundle\OAuth\Response\UserResponseInterface;
@@ -26,6 +25,7 @@ use HWI\Bundle\OAuthBundle\Security\Core\Authentication\Token\OAuthToken;
 use Pimcore\Controller\FrontendController;
 use Ramsey\Uuid\Uuid;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Security;
+use Symfony\Component\Security\Core\Exception\DisabledException;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -91,7 +91,7 @@ class AuthController extends FrontendController
         // In some cases, additional information must be provided after registering via OAuth (e.g. birthday).
         // As long as these informations are missing, an account should not be set active. This exception is
         // thrown if a customer tries to login via OAuth with an account which is not set to active yet.
-        if ($error instanceof AccountNotActiveException) {
+        if ($error instanceof DisabledException) {
             // redirect to a route in order to finish the registration process if necessary
         }
 
@@ -184,7 +184,7 @@ class AuthController extends FrontendController
         if ($form->isSubmitted() && $form->isValid()) {
             $registrationFormHandler->updateCustomerFromForm($customer, $form);
 
-            // if a customer is not set to active the OAuth login will throw an AccountNotActiveException.
+            // if a customer is not set to active the OAuth login will throw an DisabledException.
             $customer->setActive(true);
 
             try {
